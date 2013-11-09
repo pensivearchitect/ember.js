@@ -3,17 +3,17 @@ var get = Ember.get, set = Ember.set;
 var application;
 var Application;
 
-Application = Ember.Application.extend({
-  name: "App",
-  rootElement: "#qunit-fixture"
-});
-
 module("Ember.Application - resetting", {
+  setup: function() {
+    Application = Ember.Application.extend({
+      name: "App",
+      rootElement: "#qunit-fixture"
+    });
+  },
   teardown: function() {
+    Application = null;
     if (application) {
-      Ember.run(function() {
-        application.destroy();
-      });
+      Ember.run(application, 'destroy');
     }
   }
 });
@@ -247,4 +247,22 @@ test("With ember-data like initializer and constant", function() {
 
   ok(DS.defaultStore, 'still has defaultStore');
   ok(application.__container__.lookup("store:main"), 'store is still present');
+});
+
+test("Ensure that the hashchange event listener is removed", function(){
+  var listeners;
+
+  Ember.$(window).off('hashchange'); // ensure that any previous listeners are cleared
+
+  Ember.run(function() {
+    application = Application.create();
+  });
+
+  listeners = Ember.$._data(Ember.$(window)[0], 'events');
+  equal(listeners['hashchange'].length, 1, 'hashchange event listener was setup');
+
+  application.reset();
+
+  listeners = Ember.$._data(Ember.$(window)[0], 'events');
+  equal(listeners['hashchange'].length, 1, 'hashchange event only exists once');
 });

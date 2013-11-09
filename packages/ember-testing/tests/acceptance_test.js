@@ -1,4 +1,4 @@
-var App, find, click, fillIn, currentRoute, visit, originalAdapter;
+var App, find, click, fillIn, currentRoute, visit, originalAdapter, andThen;
 
 module("ember-testing Acceptance", {
   setup: function() {
@@ -40,9 +40,13 @@ module("ember-testing Acceptance", {
       App.setupForTesting();
     });
 
-    Ember.run(function() {
-      App.advanceReadiness();
-    });
+    if (Ember.FEATURES.isEnabled('ember-testing-lazy-routing')){
+      // readiness is advanced upon first visit
+    } else {
+      Ember.run(function() {
+        App.advanceReadiness();
+      });
+    }
 
     App.injectTestHelpers();
 
@@ -50,6 +54,7 @@ module("ember-testing Acceptance", {
     click = window.click;
     fillIn = window.fillIn;
     visit = window.visit;
+    andThen = window.andThen;
 
     originalAdapter = Ember.Test.adapter;
   },
@@ -85,25 +90,25 @@ test("helpers can be chained with then", function() {
   }).then(function() {
     equal(Ember.$('.ember-text-field').val(), 'context working', "chained with fillIn");
     click(".does-not-exist");
-  }).then(function() {
-    // This redundant `then` is needed in this test
-    // so we can assert that thrown exceptions
-    // do not fire multiple times
+  }).then(null, function(e) {
+    equal(e.message, "Element .does-not-exist not found.", "Non-existent click exception caught");
   });
-
 });
 
 
+
+// Keep this for backwards compatibility
 
 test("helpers can be chained to each other", function() {
   expect(4);
 
   currentRoute = 'index';
 
-  visit('/posts').click('a:first', '#comments-link')
+  visit('/posts')
+  .click('a:first', '#comments-link')
   .fillIn('.ember-text-field', "hello")
   .then(function() {
-    equal(currentRoute, 'comments', "Successfully visited posts route");
+    equal(currentRoute, 'comments', "Successfully visited comments route");
     equal(Ember.$('.ember-text-field').val(), 'hello', "Fillin successfully works");
     find('.ember-text-field').one('keypress', function(e) {
       equal(e.keyCode, 13, "keyevent chained with correct keyCode.");
@@ -113,5 +118,78 @@ test("helpers can be chained to each other", function() {
   .visit('/posts')
   .then(function() {
     equal(currentRoute, 'posts', "Thens can also be chained to helpers");
+  });
+});
+
+test("helpers don't need to be chained", function() {
+  expect(3);
+
+  currentRoute = 'index';
+
+  visit('/posts');
+
+  click('a:first', '#comments-link');
+
+  fillIn('.ember-text-field', "hello");
+
+  andThen(function() {
+    equal(currentRoute, 'comments', "Successfully visited comments route");
+    equal(find('.ember-text-field').val(), 'hello', "Fillin successfully works");
+  });
+
+  visit('/posts');
+
+  andThen(function() {
+    equal(currentRoute, 'posts');
+  });
+});
+
+test("Nested async helpers", function() {
+  expect(3);
+
+  currentRoute = 'index';
+
+  visit('/posts');
+
+  andThen(function() {
+    click('a:first', '#comments-link');
+
+    fillIn('.ember-text-field', "hello");
+  });
+
+  andThen(function() {
+    equal(currentRoute, 'comments', "Successfully visited comments route");
+    equal(find('.ember-text-field').val(), 'hello', "Fillin successfully works");
+  });
+
+  visit('/posts');
+
+  andThen(function() {
+    equal(currentRoute, 'posts');
+  });
+});
+
+test("Helpers nested in thens", function() {
+  expect(3);
+
+  currentRoute = 'index';
+
+  visit('/posts').then(function() {
+    click('a:first', '#comments-link');
+  });
+
+  andThen(function() {
+    fillIn('.ember-text-field', "hello");
+  });
+
+  andThen(function() {
+    equal(currentRoute, 'comments', "Successfully visited comments route");
+    equal(find('.ember-text-field').val(), 'hello', "Fillin successfully works");
+  });
+
+  visit('/posts');
+
+  andThen(function() {
+    equal(currentRoute, 'posts');
   });
 });
